@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#121213">
+  <title>Wordle for Areebah</title>
+  <style>
+    :root {
+      --bg: #121213; --text: #f8f8f8; --muted: #818384;
+      --tile-border: #3a3a3c; --empty: #121213;
+      --correct: #538d4e; --present: #b59f3b; --absent: #3a3a3c;
+      --key: #818384; --key-text: #fff;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); }
+    body {
+      font-family: "Helvetica Neue", Arial, sans-serif;
+      display: flex; justify-content: center; min-height: 100svh;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .app { width: min(100%, 500px); min-height: 100svh; display: flex; flex-direction: column; padding: 0 14px env(safe-area-inset-bottom); }
+    header {
+      height: 58px; border-bottom: 1px solid #3a3a3c; display: flex;
+      align-items: center; justify-content: center; position: relative; flex-shrink: 0;
+    }
+    h1 { font-family: Georgia, serif; font-size: 23px; letter-spacing: .4px; margin: 0; font-weight: 700; }
+    .subtitle { text-align: center; color: #b5b5b5; font-size: 12px; margin: 10px 0 0; letter-spacing: .5px; }
+    .board-wrap { flex: 1; display: flex; justify-content: center; align-items: center; padding: 14px 0; min-height: 0; }
+    .board { display: grid; grid-template-rows: repeat(6, 1fr); gap: 5px; width: min( min( calc(100vw - 44px), 330px), 42vh); aspect-ratio: 5 / 6; }
+    .row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+    .tile {
+      border: 2px solid var(--tile-border); display: flex; align-items: center; justify-content: center;
+      font-size: clamp(22px, 7vw, 31px); line-height: 1; font-weight: 700; text-transform: uppercase;
+      user-select: none; min-width: 0;
+    }
+    .tile.filled { border-color: #565758; animation: pop .08s ease-in-out; }
+    .tile.reveal { border: 0; animation: flip .48s ease forwards; }
+    .tile.correct { background: var(--correct); }
+    .tile.present { background: var(--present); }
+    .tile.absent { background: var(--absent); }
+    @keyframes pop { 0% { transform: scale(.92); } 100% { transform: scale(1); } }
+    @keyframes flip { 0% { transform: rotateX(0); } 45% { transform: rotateX(90deg); } 55% { transform: rotateX(90deg); } 100% { transform: rotateX(0); } }
+    @keyframes shake { 10%, 90% { transform: translateX(-1px); } 20%, 80% { transform: translateX(2px); } 30%, 50%, 70% { transform: translateX(-4px); } 40%, 60% { transform: translateX(4px); } }
+    .shake { animation: shake .35s; }
+    .keyboard { width: 100%; margin: 0 auto 18px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+    .key-row { display: flex; justify-content: center; gap: 5px; width: 100%; }
+    .key {
+      border: 0; border-radius: 4px; height: 54px; flex: 1; max-width: 43px;
+      background: var(--key); color: var(--key-text); font-size: 17px; font-weight: 700;
+      display: flex; justify-content: center; align-items: center; cursor: pointer; padding: 0;
+      touch-action: manipulation;
+    }
+    .key.wide { max-width: 68px; font-size: 11px; }
+    .key.correct { background: var(--correct); } .key.present { background: var(--present); } .key.absent { background: var(--absent); }
+    .key:active { filter: brightness(1.2); }
+    .message {
+      position: fixed; top: 72px; left: 50%; transform: translateX(-50%);
+      background: #f8f8f8; color: #121213; border-radius: 4px; padding: 12px 16px;
+      font-weight: 700; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .18s;
+      z-index: 5; white-space: nowrap; box-shadow: 0 3px 12px #0008;
+    }
+    .message.show { opacity: 1; }
+    .end-panel { display: none; text-align: center; padding: 0 0 16px; }
+    .end-panel.show { display: block; }
+    .end-panel p { margin: 4px 0 12px; font-size: 14px; }
+    .answer { color: #a6d69f; font-weight: 800; letter-spacing: 3px; font-size: 20px; }
+    .restart { background: #538d4e; border: 0; color: white; padding: 10px 18px; border-radius: 4px; font-weight: 700; cursor: pointer; }
+    footer { text-align: center; color: #777; font-size: 10px; padding: 0 0 10px; }
+    @media (max-height: 650px) {
+      header { height: 48px; } h1 { font-size: 20px; }
+      .board-wrap { padding: 8px 0; }
+      .keyboard { gap: 6px; margin-bottom: 10px; }
+      .key { height: 43px; }
+    }
+    @media (min-width: 600px) { .app { border-left: 1px solid #242426; border-right: 1px solid #242426; } }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header><h1>Wordle for Areebah</h1></header>
+    <p class="subtitle">GUESS THE 5-LETTER WORD · 6 TRIES</p>
+    <div class="board-wrap"><section class="board" id="board" aria-label="Guess board"></section></div>
+    <section class="end-panel" id="endPanel" aria-live="polite">
+      <p id="endMessage"></p><div class="answer">CUTIE</div>
+      <p style="color:#aaa;font-size:12px">A little word, just for you.</p>
+      <button class="restart" id="restart">Play again</button>
+    </section>
+    <section class="keyboard" id="keyboard" aria-label="On-screen keyboard"></section>
+    <footer>Made for Areebah · Word list: tabatkins/wordle-list</footer>
+  </main>
+  <div class="message" id="message" role="status"></div>
+<script>
+(() => {
+  const ANSWER = "CUTIE";
+  // The built-in fallback keeps common guesses available if the network is offline.
+  // The complete accepted-guess list is loaded from the public Wordle-derived source below.
+  const WORDS = new Set((`ABOUT ABOVE ABUSE ACTOR ACUTE ADMIT ADOPT ADORE AFTER AGAIN AGENT AGREE AHEAD ALARM ALBUM ALERT ALIEN ALIGN ALIVE ALLOW ALONE ALONG ALTER ANGEL ANGER ANGLE ANGRY APART APPLE APPLY ARENA ARGUE ARISE ARMOR ARRAY ASIDE ASSET AUDIO AVOID AWAKE AWARD AWARE BADGE BASIC BEACH BEGIN BEING BELOW BENCH BIRTH BLACK BLAME BLANK BLAST BLEND BLIND BLOCK BLOOD BOARD BOOST BOUND BRAIN BRAND BRAVE BREAD BREAK BRICK BRIDE BRIEF BRING BROAD BROWN BUILD BUILT BURST BUYER CABIN CABLE CARRY CATCH CAUSE CHAIN CHAIR CHART CHASE CHEAP CHECK CHEEK CHEER CHEST CHIEF CHILD CHILL CHINA CHOSE CIVIL CLAIM CLASS CLEAN CLEAR CLERK CLICK CLIMB CLOCK CLOSE CLOUD COACH COAST COLOR COULD COUNT COURT COVER CRAFT CRASH CRAZY CREAM CRIME CROSS CROWD CROWN CURVE CYCLE DAILY DANCE DATED DEALT DEATH DEBUT DELAY DEPTH DOING DOUBT DOZEN DRAFT DRAMA DRAWN DREAM DRESS DRINK DRIVE DROVE DYING EAGER EARLY EARTH EIGHT ELDER ELECT ELITE EMPTY ENEMY ENJOY ENTER ENTRY EQUAL ERROR EVENT EVERY EXACT EXIST EXTRA FAITH FALSE FAULT FAVOR FEAST FENCE FEWER FIELD FIFTH FIFTY FIGHT FINAL FIRST FIXED FLASH FLEET FLOOR FOCUS FORCE FORTH FORTY FORUM FOUND FRAME FRANK FRAUD FRESH FRONT FRUIT FULLY FUNNY GIANT GIVEN GLASS GLOBE GOING GRACE GRADE GRAND GRANT GRASS GREAT GREEN GROSS GROUP GROWN GUARD GUESS GUEST GUIDE HAPPY HEART HEAVY HENCE HOBBY HORSE HOTEL HOUSE HUMAN IDEAL IMAGE INDEX INNER INPUT ISSUE JAPAN JOINT JUDGE KNOWN LABEL LARGE LASER LATER LAUGH LAYER LEARN LEASE LEAST LEAVE LEGAL LEVEL LIGHT LIMIT LOCAL LOGIC LOOSE LOWER LUCKY LUNCH MAGIC MAJOR MAKER MARCH MATCH MAYBE MAYOR MEANT MEDIA METAL MIGHT MINOR MINUS MIXED MODEL MONEY MONTH MORAL MOTOR MOUNT MOUSE MOUTH MOVED MOVIE MUSIC NEEDS NEVER NEWLY NIGHT NOISE NORTH NOTED NOVEL NURSE OCCUR OCEAN OFFER OFTEN ORDER OTHER OUGHT PAINT PANEL PAPER PARTY PEACE PHASE PHONE PHOTO PIANO PIECE PILOT PITCH PLACE PLAIN PLANE PLANT PLATE POINT POUND POWER PRESS PRICE PRIDE PRIME PRINT PRIOR PRIZE PROOF PROUD PROVE QUEEN QUICK QUIET QUITE RADIO RAISE RANGE RAPID RATIO REACH READY REALM REBEL REFER RELAX REPLY RIGHT RIVAL RIVER ROBOT ROGER ROUGH ROUND ROUTE ROYAL RURAL SCALE SCENE SCOPE SCORE SENSE SERVE SEVEN SHALL SHAPE SHARE SHARP SHEET SHELF SHELL SHIFT SHINE SHIRT SHOCK SHOOT SHORT SHOWN SIGHT SINCE SIXTH SKILL SLEEP SLICE SLIDE SMALL SMART SMILE SMITH SMOKE SOLID SOLVE SORRY SOUND SOUTH SPACE SPARE SPEAK SPEED SPEND SPENT SPLIT SPOKE SPORT STAFF STAGE STAKE START STATE STEAM STEEL STICK STILL STOCK STONE STOOD STORE STORM STORY STRIP STUCK STUDY STYLE SUGAR SUITE SUPER SWEET TABLE TAKEN TASTE TEACH THEME THERE THESE THICK THING THINK THIRD THOSE THREE THREW THROW TIGHT TIMES TIRED TITLE TODAY TOPIC TOTAL TOUCH TOUGH TOWER TRACK TRADE TRAIN TREAT TREND TRIAL TRIED TRIES TRULY TRUST TRUTH TWICE UNDER UNION UNITY UNTIL UPPER UPSET URBAN USAGE USUAL VALID VALUE VIDEO VISIT VITAL VOICE WASTE WATCH WATER WHEEL WHERE WHICH WHILE WHITE WHOLE WHOSE WOMAN WOMEN WORLD WORRY WORSE WORST WORTH WOULD WRITE WRONG WROTE YIELD YOUNG YOUTH DAIRY CUTIE`).split(/\s+/));
+  let dictionaryReady = false;
+  const WORD_LIST_URL = "https://raw.githubusercontent.com/tabatkins/wordle-list/main/words";
+  const dictionaryPromise = fetch(WORD_LIST_URL)
+    .then(response => { if (!response.ok) throw new Error("Word list unavailable"); return response.text(); })
+    .then(text => { text.split(/\s+/).forEach(word => { const w = word.trim().toUpperCase(); if (/^[A-Z]{5}$/.test(w)) WORDS.add(w); }); dictionaryReady = true; })
+    .catch(() => { dictionaryReady = true; console.warn("Using the built-in word list; the full dictionary could not be loaded."); });
+  const board = document.getElementById("board");
+  const keyboard = document.getElementById("keyboard");
+  const message = document.getElementById("message");
+  const endPanel = document.getElementById("endPanel");
+  const endMessage = document.getElementById("endMessage");
+  let guesses, row, col, finished, keyStates, messageTimer;
+
+  function init() {
+    guesses = Array.from({length: 6}, () => "");
+    row = 0; col = 0; finished = false; submitting = false; keyStates = {};
+    board.innerHTML = ""; keyboard.innerHTML = ""; endPanel.classList.remove("show");
+    for (let r = 0; r < 6; r++) {
+      const line = document.createElement("div"); line.className = "row";
+      for (let c = 0; c < 5; c++) {
+        const tile = document.createElement("div"); tile.className = "tile"; tile.id = `tile-${r}-${c}`;
+        line.appendChild(tile);
+      }
+      board.appendChild(line);
+    }
+    const rows = [
+      [..."QWERTYUIOP"],
+      [..."ASDFGHJKL"],
+      ["ENTER", ..."ZXCVBNM", "BACKSPACE"]
+    ];
+    rows.forEach(keys => {
+      const line = document.createElement("div"); line.className = "key-row";
+      keys.forEach(ch => {
+        const key = document.createElement("button"); key.type = "button";
+        const wide = ch === "ENTER" || ch === "BACKSPACE";
+        key.className = "key" + (wide ? " wide" : "");
+        key.textContent = ch === "ENTER" ? "ENTER" : ch === "BACKSPACE" ? "⌫" : ch;
+        key.dataset.key = ch;
+        key.setAttribute("aria-label", ch === "BACKSPACE" ? "Backspace" : ch === "ENTER" ? "Enter" : ch);
+        key.addEventListener("click", () => handleKey(ch));
+        line.appendChild(key);
+      });
+      keyboard.appendChild(line);
+    });
+  }
+  function toast(text) {
+    message.textContent = text; message.classList.add("show");
+    clearTimeout(messageTimer); messageTimer = setTimeout(() => message.classList.remove("show"), 1400);
+  }
+  function paintTile(r,c,letter) {
+    const tile = document.getElementById(`tile-${r}-${c}`);
+    tile.textContent = letter; tile.classList.toggle("filled", !!letter);
+  }
+  function handleKey(key) {
+    if (finished || submitting) return;
+    if (key === "ENTER") return submitGuess();
+    if (key === "⌫" || key === "BACKSPACE") {
+      if (col > 0) { col--; guesses[row] = guesses[row].slice(0, -1); paintTile(row,col,""); }
+      return;
+    }
+    if (/^[A-Z]$/.test(key) && col < 5) {
+      guesses[row] += key; paintTile(row,col,key); col++;
+    }
+  }
+  let submitting = false;
+  function submitGuess() {
+    if (submitting) return;
+    if (!dictionaryReady) { toast("Loading word list…"); return; }
+    const guess = guesses[row];
+    if (guess.length !== 5) { toast("Not enough letters"); shakeRow(); return; }
+    if (guess !== ANSWER && !WORDS.has(guess)) { toast("Not in word list"); shakeRow(); return; }
+    submitting = true;
+    const result = Array(5).fill("absent");
+    const remaining = ANSWER.split("");
+    for (let i=0;i<5;i++) if (guess[i] === ANSWER[i]) { result[i]="correct"; remaining[i]=null; }
+    for (let i=0;i<5;i++) if (result[i] !== "correct") {
+      const found = remaining.indexOf(guess[i]);
+      if (found !== -1) { result[i]="present"; remaining[found]=null; }
+    }
+    result.forEach((status,i) => {
+      setTimeout(() => {
+        const tile = document.getElementById(`tile-${row}-${i}`);
+        tile.classList.remove("filled"); tile.classList.add("reveal",status);
+        const old = keyStates[guess[i]];
+        if (status === "correct" || (status === "present" && old !== "correct") || (!old)) keyStates[guess[i]]=status;
+        const keyEl = [...keyboard.querySelectorAll(".key")].find(k => k.dataset.key === guess[i]);
+        if (keyEl) { keyEl.classList.remove("correct","present","absent"); keyEl.classList.add(keyStates[guess[i]]); }
+      }, i * 320);
+    });
+    const won = guess === ANSWER;
+    const last = row === 5;
+    setTimeout(() => {
+      if (won || last) {
+        finished = true; endPanel.classList.add("show");
+        endMessage.textContent = won ? ["Brilliant!","Splendid!","You got it!","A perfect guess!","Lovely!"][row] : "The word was:";
+        if (!won) endMessage.textContent = "Better luck next time!";
+      } else { row++; col=0; submitting = false; }
+    }, 5 * 320 + 250);
+  }
+  function shakeRow() {
+    const el = board.children[row]; el.classList.remove("shake"); void el.offsetWidth; el.classList.add("shake");
+  }
+  document.addEventListener("keydown", e => {
+    if (e.key === "Enter") handleKey("ENTER");
+    else if (e.key === "Backspace") handleKey("BACKSPACE");
+    else if (/^[a-zA-Z]$/.test(e.key)) handleKey(e.key.toUpperCase());
+  });
+  document.getElementById("restart").addEventListener("click", init);
+  init();
+})();
+</script>
+</body>
+</html>
